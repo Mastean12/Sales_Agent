@@ -51,6 +51,23 @@
     <x-input-error :messages="$errors->get('communication_status')" class="mt-2" />
 </div>
 
+<div class="mt-4">
+    <x-input-label for="owner_id" value="Owner" />
+    <select id="owner_id" name="owner_id" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+        <option value="">Unassigned</option>
+        @foreach ($owners as $owner)
+            <option value="{{ $owner->id }}" @selected((int) old('owner_id', $contact?->owner_id) === $owner->id)>{{ $owner->name }}</option>
+        @endforeach
+    </select>
+    <x-input-error :messages="$errors->get('owner_id')" class="mt-2" />
+</div>
+
+<div class="mt-4">
+    <x-input-label for="notes" value="Notes" />
+    <textarea id="notes" name="notes" rows="3" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">{{ old('notes', $contact?->notes) }}</textarea>
+    <x-input-error :messages="$errors->get('notes')" class="mt-2" />
+</div>
+
 @if ($contact)
     <div class="mt-4 flex items-center gap-2">
         <input type="checkbox" id="opted_out" name="opted_out" value="1" @checked(old('opted_out', $contact->opted_out)) />

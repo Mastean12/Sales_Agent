@@ -6,12 +6,12 @@
     <div class="py-6">
         <div class="max-w-2xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white shadow-sm sm:rounded-lg p-6">
-                <form method="POST" action="{{ route('contacts.store') }}">
+                <form method="POST" action="{{ route('contacts.store') }}" x-data="{ submitting: false }" @submit="submitting = true">
                     @csrf
                     @include('contacts._form')
 
                     <div class="mt-6 flex gap-2">
-                        <x-primary-button>{{ __('Create Contact') }}</x-primary-button>
+                        <x-primary-button x-bind:disabled="submitting" x-text="submitting ? 'Creating…' : 'Create Contact'"></x-primary-button>
                         <a href="{{ route('contacts.index') }}" class="text-sm text-gray-600 self-center">Cancel</a>
                     </div>
                 </form>

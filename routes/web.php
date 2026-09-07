@@ -15,7 +15,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', Dashboard::class)->name('dashboard');
 
     Route::resource('companies', CompanyController::class);
-    Route::resource('contacts', ContactController::class)->except(['show']);
+    Route::resource('contacts', ContactController::class);
     Route::resource('opportunities', OpportunityController::class);
     Route::patch('/opportunities/{opportunity}/transition', [OpportunityController::class, 'transition'])
         ->name('opportunities.transition');
