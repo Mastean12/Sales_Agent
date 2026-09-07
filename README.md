@@ -240,16 +240,49 @@ was touched.
   the Linux app container (`docker-compose.yml`) or under WSL2. This is a
   platform fact, not a workaround to silently paper over — flagging it here so
   it isn't mistaken for Horizon working natively on Windows.
-- **This sandbox has no local PostgreSQL server, Redis server, or running
-  Docker daemon**, so `php artisan test` and local `php artisan migrate` in
-  this environment ran against SQLite (`phpunit.xml` already defaults tests to
-  SQLite in-memory, independent of this limitation). `.env.example` and
-  `docker-compose.yml` both default to PostgreSQL + Redis, matching the
-  architecture plan, and should be used for real development/staging/production.
+- **This sandbox has no local PostgreSQL server or running Docker daemon**, so
+  `php artisan test` and local `php artisan migrate` in this environment ran
+  against SQLite (`phpunit.xml` already defaults tests to SQLite in-memory,
+  independent of this limitation). `.env.example` and `docker-compose.yml`
+  both default to PostgreSQL + Redis, matching the architecture plan, and
+  should be used for real development/staging/production.
 - **`predis`** (pure-PHP Redis client) is configured instead of the `phpredis`
   extension, since `phpredis` isn't available in this environment. The Docker
   image installs the real `phpredis` extension via PECL; `REDIS_CLIENT` can be
   switched to `phpredis` there if preferred.
+- A local Redis is now running via Laragon's bundled
+  `redis-server.exe` (started manually — it is **not** a Windows service, so
+  it will not survive a reboot). For anything beyond a quick local check, use
+  Laragon's Redis toggle (auto-starts it) or `docker compose up redis`.
+
+## Queue infrastructure verification
+
+`.env` had drifted from `.env.example`: it still said `REDIS_CLIENT=phpredis`
+(an extension that isn't installed) and `QUEUE_CONNECTION=database`, so
+Horizon — which is Redis-only — would have hard-crashed
+(`Class "Redis" not found`) the moment anyone opened `/horizon`. Fixed to
+`REDIS_CLIENT=predis` / `QUEUE_CONNECTION=redis` to match `.env.example`.
+
+Verified end-to-end against a real local Redis instance:
+
+| Check | Result |
+|---|---|
+| Laravel reaches Redis (`Redis::connection()->ping()`) | ✅ `PONG` via predis |
+| `/horizon` dashboard and `/horizon/api/stats` render for Admin | ✅ 200, valid JSON |
+| `/companies` (or any Horizon route) for a non-Admin/Founder role | ✅ 403 (gate unchanged) |
+| A real job dispatched (`dispatch(fn () => ...)`) lands in the `redis` queue | ✅ confirmed via `redis-cli keys` |
+| `php artisan queue:work` picks it up and executes it | ✅ side effect observed |
+| `php artisan horizon` (the master **supervisor** process) | ❌ `Call to undefined function pcntl_async_signals()` |
+
+That last row is the one real, unavoidable gap on native Windows: Horizon's
+supervisor forks and signal-manages worker processes via `pcntl`, which does
+not exist on Windows PHP builds at all (not a missing extension you can
+enable — the functions themselves aren't compiled in). The dashboard UI and
+`queue:work` both function correctly; only the `horizon` command's own
+process-supervision needs the Linux container (`docker-compose.yml`) or
+WSL2. `tests/Feature/QueueInfrastructureTest.php` covers what's testable
+without live infrastructure (queue config, Horizon registration/gate,
+dispatch-and-run under the `sync` driver tests use).
 
 ## Remaining work (not started)
 
