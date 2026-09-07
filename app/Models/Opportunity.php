@@ -10,7 +10,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
-#[Fillable(['company_id', 'owner_id', 'problem', 'value', 'probability', 'next_action'])]
+#[Fillable([
+    'company_id', 'owner_id', 'name', 'problem', 'value', 'probability', 'next_action',
+    'next_action_due', 'notes', 'problem_category', 'evidence', 'impact', 'urgency',
+    'stakeholder', 'budget_signal', 'business_impact', 'decision_process', 'fit',
+])]
 class Opportunity extends Model
 {
     /** @use HasFactory<OpportunityFactory> */
@@ -24,6 +28,7 @@ class Opportunity extends Model
             'expected_value' => 'decimal:2',
             'probability' => 'integer',
             'closed_at' => 'datetime',
+            'next_action_due' => 'date',
         ];
     }
 
@@ -34,6 +39,16 @@ class Opportunity extends Model
                 ? round((float) $opportunity->value * $opportunity->probability / 100, 2)
                 : null;
         });
+    }
+
+    /**
+     * Opportunities predate the "name" field (see migration
+     * 2026_09_07_073059), so existing/legacy records fall back to the
+     * company name for display.
+     */
+    public function displayName(): string
+    {
+        return $this->name ?: $this->company->name;
     }
 
     /**

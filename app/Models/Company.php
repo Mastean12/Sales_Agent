@@ -6,10 +6,11 @@ use Database\Factories\CompanyFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
-#[Fillable(['name', 'domain', 'industry', 'location', 'icp_score', 'source', 'status'])]
+#[Fillable(['name', 'domain', 'industry', 'location', 'icp_score', 'source', 'status', 'owner_id', 'notes'])]
 class Company extends Model
 {
     /** @use HasFactory<CompanyFactory> */
@@ -20,6 +21,14 @@ class Company extends Model
         return [
             'icp_score' => 'integer',
         ];
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_id');
     }
 
     /**
