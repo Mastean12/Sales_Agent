@@ -1,4 +1,4 @@
-@php $company = $company ?? null; @endphp
+@php $company = $company ?? null; $owners = $owners ?? collect(); @endphp
 
 <div>
     <x-input-label for="name" value="Name" />
@@ -44,4 +44,21 @@
         @endforeach
     </select>
     <x-input-error :messages="$errors->get('status')" class="mt-2" />
+</div>
+
+<div class="mt-4">
+    <x-input-label for="owner_id" value="Owner" />
+    <select id="owner_id" name="owner_id" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+        <option value="">Unassigned</option>
+        @foreach ($owners as $owner)
+            <option value="{{ $owner->id }}" @selected((int) old('owner_id', $company?->owner_id) === $owner->id)>{{ $owner->name }}</option>
+        @endforeach
+    </select>
+    <x-input-error :messages="$errors->get('owner_id')" class="mt-2" />
+</div>
+
+<div class="mt-4">
+    <x-input-label for="notes" value="Notes" />
+    <textarea id="notes" name="notes" rows="4" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">{{ old('notes', $company?->notes) }}</textarea>
+    <x-input-error :messages="$errors->get('notes')" class="mt-2" />
 </div>
