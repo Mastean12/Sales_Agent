@@ -31,7 +31,8 @@ class ContactManagementTest extends TestCase
             'communication_status' => 'not_contacted',
         ]);
 
-        $response->assertRedirect(route('companies.show', $company));
+        $contact = Contact::firstWhere('name', 'Jane Doe');
+        $response->assertRedirect(route('contacts.show', $contact));
         $this->assertDatabaseHas('contacts', ['name' => 'Jane Doe', 'company_id' => $company->id]);
     }
 
@@ -45,7 +46,7 @@ class ContactManagementTest extends TestCase
             'name' => $contact->name,
             'communication_status' => 'opted_out',
             'opted_out' => '1',
-        ])->assertRedirect(route('companies.show', $contact->company_id));
+        ])->assertRedirect(route('contacts.show', $contact));
 
         $this->assertTrue($contact->fresh()->opted_out);
     }
