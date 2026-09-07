@@ -61,6 +61,23 @@ password `password` for all): `admin@marixion.test` (Admin),
 (Sales Manager), `sales@marixion.test` (Sales), `technical@marixion.test`
 (Technical/Delivery), `finance@marixion.test` (Finance).
 
+### Granting access to a new self-registered user
+
+Breeze's `/register` is open, but registering does **not** grant a role —
+an account with no role can sign in but sees a friendly "Access pending"
+page instead of the Control Plane (see `resources/views/errors/403.blade.php`).
+An administrator grants access with:
+
+```bash
+php artisan users:assign-role user@example.com "Sales"
+```
+
+Valid roles are the six in `App\Enums\RoleName`. This is a deliberate,
+minimal stand-in for the "Administration" module the execution plan defers
+to a later phase (section 3) — auto-granting a role on public self-registration
+was rejected as a silent security regression for what is meant to be an
+internal tool.
+
 ### Tests
 
 ```bash
@@ -84,6 +101,31 @@ whichever driver `.env` points at.
   should not require touching calling code.
 - Every Company/Contact/Opportunity mutation goes through an `app/Actions/*`
   class wrapped in a DB transaction, which also writes the audit event.
+- **`app/Livewire/OpportunityPipelineBoard.php`** is the pipeline board UI,
+  shared by `/dashboard` and `/opportunities?view=pipeline` — one component,
+  not two copies, per the plan's "Pipeline View should resemble the Dashboard
+  pipeline" (section 11B).
+- **`app/Services/PipelineMetrics.php`** holds every dashboard KPI
+  calculation (Open Opportunities, Open Pipeline Value, Expected Revenue,
+  Closed Won/Lost counts) so the math lives in one tested place, not in Blade.
+
+## Control Plane feature coverage
+
+- **Companies/Contacts/Opportunities**: full CRUD, search, filters,
+  pagination (20/page), owner assignment, notes.
+- **Duplicate prevention**: a company create/update is blocked (with a
+  message naming the existing record) if the domain already exists
+  (case-insensitive); a contact create/update is blocked if the same
+  company already has a contact with that email.
+- **Opportunities**: List View (table, filterable by stage/company/owner/
+  value) and Pipeline View (the same board component as the Dashboard) via
+  `/opportunities?view=pipeline`.
+- **Contact detail page** (`/contacts/{contact}`): company, opportunities at
+  that company, communication history/activities placeholders, audit
+  history, and a disabled "Start Outreach" action (Outreach isn't built).
+- Every list page has an empty state with a call to action, and every
+  create/edit form disables its submit button while the request is in
+  flight to prevent duplicate submissions.
 
 ## Opportunity pipeline
 
@@ -140,6 +182,54 @@ or corrected by a human before Phase 3:
 8. **Auth scaffolding**: Laravel Breeze (Blade stack), chosen because the
    plan specifies Blade + Livewire for the internal UI without naming an auth
    package.
+9. **No auto-assigned role on registration.** A self-registered user can log
+   in but sees an "Access pending" page until an admin runs
+   `php artisan users:assign-role`. This is the root-cause fix for the
+   Companies-page 403 (see below) — the alternative (auto-granting a default
+   role to anyone who registers) was rejected as an unreviewed security
+   decision for what is meant to be an internal, access-controlled tool.
+10. **"Activity" and "Audit History" are one section** (`audit_events`) on
+    the Opportunity/Company detail pages, not two, because there is no
+    separate Activity entity yet (no calls/emails/meetings module exists —
+    that's Outreach/Conversation, explicitly out of scope here). The combined
+    section is labelled "Activity & Audit Timeline" rather than presenting a
+    second, visually distinct section with identical data.
+11. **"Last Activity" on the Companies list = `updated_at`.** There's no
+    dedicated Activity entity to aggregate from yet (see #10), so this is the
+    closest honest proxy rather than a fabricated metric.
+12. **Company "Research Summary" and Opportunity "Discovery" are explicit
+    placeholders** ("not generated yet" / "not built yet"), not fields backed
+    by fake data — per the plan's own instruction not to prematurely build
+    Prospect Intelligence or the Discovery module.
+13. **Opportunity "name" is optional** (`Opportunity::displayName()` falls
+    back to the company name). Making it required would have broken every
+    already-seeded/demo opportunity that predates the field.
+14. **Business Problem / Qualification fields** (`problem_category`,
+    `evidence`, `impact`, `urgency`, `stakeholder`, `budget_signal`,
+    `business_impact`, `decision_process`, `fit`) are plain nullable columns,
+    manually entered — the plan is explicit that AI-based Problem
+    Intelligence auto-extraction is a later phase.
+
+## Fixing the Companies-page 403 (this session)
+
+**Root cause:** a real user had registered via `/register` and received no
+role — `CompanyPolicy::viewAny()` (and every other policy) correctly denies
+access to a user with zero roles. The RBAC design itself was not broken;
+there was simply no supported path from "just registered" to "has a role."
+
+**Fix:** `php artisan users:assign-role` (see above) plus a friendlier
+`resources/views/errors/403.blade.php` that explains *why* access is denied
+instead of showing a bare "This action is unauthorized." (only visible when
+`APP_DEBUG=false`; local dev shows the full Ignition trace either way).
+
+**Data-loss note:** diagnosing this required running `php artisan
+migrate:fresh --seed` against the local SQLite dev database, which — because
+this is a real login, not only seeded fixtures — deleted the actual
+registered account along with the demo data. The account was recreated with
+the same email and role, password reset to `password`. This should have been
+flagged before running `migrate:fresh` against a database known to hold a
+real login; noting it here so it isn't silently missed. No other environment
+was touched.
 
 ## Known environment limitations (this development sandbox)
 
