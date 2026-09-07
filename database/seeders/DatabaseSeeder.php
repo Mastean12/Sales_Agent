@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Enums\OpportunityStage;
 use App\Models\Company;
+use App\Models\Contact;
 use App\Models\Opportunity;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -52,9 +53,12 @@ class DatabaseSeeder extends Seeder
 
         if (app()->environment('local')) {
             Company::factory(8)
-                ->hasContacts(2)
-                ->create()
+                ->create(['owner_id' => $sales->id])
                 ->each(function (Company $company) use ($sales) {
+                    $company->contacts()->saveMany(
+                        Contact::factory(2)->make(['owner_id' => $sales->id])
+                    );
+
                     Opportunity::factory()->create([
                         'company_id' => $company->id,
                         'owner_id' => $sales->id,
