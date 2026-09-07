@@ -23,15 +23,30 @@ class OpportunityController extends Controller
         $this->authorize('viewAny', Opportunity::class);
 
         $stages = OpportunityStage::cases();
+        $view = $request->string('view', 'list') === 'pipeline' ? 'pipeline' : 'list';
 
         $opportunities = Opportunity::query()
             ->with(['company', 'owner'])
+            ->when($request->filled('q'), function ($query) use ($request) {
+                $term = '%'.$request->string('q').'%';
+                $query->where(function ($q) use ($term) {
+                    $q->where('name', 'like', $term)
+                        ->orWhereHas('company', fn ($c) => $c->where('name', 'like', $term));
+                });
+            })
             ->when($request->filled('stage'), fn ($query) => $query->where('stage', $request->string('stage')))
+            ->when($request->filled('company_id'), fn ($query) => $query->where('company_id', $request->integer('company_id')))
+            ->when($request->filled('owner_id'), fn ($query) => $query->where('owner_id', $request->integer('owner_id')))
+            ->when($request->filled('min_value'), fn ($query) => $query->where('value', '>=', $request->float('min_value')))
+            ->when($request->filled('max_value'), fn ($query) => $query->where('value', '<=', $request->float('max_value')))
             ->orderByDesc('updated_at')
             ->paginate(20)
             ->withQueryString();
 
-        return view('opportunities.index', compact('opportunities', 'stages'));
+        $companies = Company::query()->orderBy('name')->get(['id', 'name']);
+        $owners = User::query()->orderBy('name')->get(['id', 'name']);
+
+        return view('opportunities.index', compact('opportunities', 'stages', 'view', 'companies', 'owners'));
     }
 
     public function create(Request $request): View
@@ -49,14 +64,7 @@ class OpportunityController extends Controller
     {
         $this->authorize('create', Opportunity::class);
 
-        $data = $request->validate([
-            'company_id' => ['required', 'exists:companies,id'],
-            'owner_id' => ['required', 'exists:users,id'],
-            'problem' => ['nullable', 'string'],
-            'value' => ['nullable', 'numeric', 'min:0'],
-            'probability' => ['required', 'integer', 'min:0', 'max:100'],
-            'next_action' => ['nullable', 'string'],
-        ]);
+        $data = $this->validated($request);
 
         $opportunity = $action->execute($data, $request->user());
 
@@ -67,7 +75,11 @@ class OpportunityController extends Controller
     {
         $this->authorize('view', $opportunity);
 
-        $opportunity->load(['company', 'owner', 'auditEvents.actor']);
+        $opportunity->load([
+            'company.contacts',
+            'owner',
+            'auditEvents' => fn ($q) => $q->latest()->with('actor'),
+        ]);
 
         $nextStages = OpportunityWorkflow::allowedNextStages($opportunity->stage);
 
@@ -87,13 +99,7 @@ class OpportunityController extends Controller
     {
         $this->authorize('update', $opportunity);
 
-        $data = $request->validate([
-            'owner_id' => ['required', 'exists:users,id'],
-            'problem' => ['nullable', 'string'],
-            'value' => ['nullable', 'numeric', 'min:0'],
-            'probability' => ['required', 'integer', 'min:0', 'max:100'],
-            'next_action' => ['nullable', 'string'],
-        ]);
+        $data = $this->validated($request);
 
         $action->execute($opportunity, $data, $request->user());
 
@@ -127,5 +133,29 @@ class OpportunityController extends Controller
         $action->execute($opportunity, $request->user());
 
         return redirect()->route('opportunities.index')->with('status', 'Opportunity deleted.');
+    }
+
+    private function validated(Request $request): array
+    {
+        return $request->validate([
+            'company_id' => ['required', 'exists:companies,id'],
+            'owner_id' => ['required', 'exists:users,id'],
+            'name' => ['nullable', 'string', 'max:255'],
+            'problem' => ['nullable', 'string'],
+            'value' => ['nullable', 'numeric', 'min:0'],
+            'probability' => ['required', 'integer', 'min:0', 'max:100'],
+            'next_action' => ['nullable', 'string'],
+            'next_action_due' => ['nullable', 'date'],
+            'notes' => ['nullable', 'string'],
+            'problem_category' => ['nullable', 'string', 'max:255'],
+            'evidence' => ['nullable', 'string'],
+            'impact' => ['nullable', 'string'],
+            'urgency' => ['nullable', 'string', 'max:255'],
+            'stakeholder' => ['nullable', 'string', 'max:255'],
+            'budget_signal' => ['nullable', 'string', 'max:255'],
+            'business_impact' => ['nullable', 'string', 'max:255'],
+            'decision_process' => ['nullable', 'string', 'max:255'],
+            'fit' => ['nullable', 'string', 'max:255'],
+        ]);
     }
 }
